@@ -1,45 +1,47 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"os"
-	"os/signal"
 	"sync"
 	"time"
 )
 
 func main() {
-	ch := make(chan int)
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stop()
+	done := make(chan struct{})
+	ch := make(chan int)
+	go Producer(&wg, ch, done)
+	go Consumer(&wg, ch)
 	go func() {
-		defer wg.Done()
-		counter := 1
-
-		for {
-			select {
-			case <-ctx.Done():
-				close(ch)
-				return
-			default:
-				ch <- counter
-				fmt.Printf("Отправленное значение: %d\n", counter)
-				counter++
-				time.Sleep(100 * time.Millisecond)
-			}
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-		for value := range ch {
-			fmt.Printf("Полученное значение: %d\n", value)
-			time.Sleep(100 * time.Millisecond)
-		}
+		<-time.After(7 * time.Second)
+		fmt.Println("Завершение программы по таймеру")
+		close(done)
 	}()
 	wg.Wait()
-	fmt.Println("Программа завершена по Ctrl + C")
+	fmt.Println("Программа завершена")
+}
+
+func Producer(wg *sync.WaitGroup, ch chan int, done chan struct{}) {
+	defer wg.Done()
+	defer close(ch)
+	counter := 1
+	for {
+		select {
+		case <-done:
+			return
+		case ch <- counter:
+			ch <- counter
+			fmt.Printf("Отправленное значение: %d\n", counter)
+			counter++
+			time.Sleep(21 * time.Millisecond)
+		}
+	}
+}
+func Consumer(wg *sync.WaitGroup, ch chan int) {
+	defer wg.Done()
+	for value := range ch {
+		fmt.Printf("Полученное значение: %d\n", value)
+		time.Sleep(21 * time.Millisecond)
+	}
 }
